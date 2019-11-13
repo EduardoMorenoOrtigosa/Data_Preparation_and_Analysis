@@ -1,0 +1,372 @@
+---
+title: "Resampling methods"
+subtitle: "Bootstrap, k-fold cross validation"
+author: "Eduardo Moreno Ortigosa, Illinois Institute of Technology"
+output:
+  html_notebook:
+    toc: yes
+    toc_float: yes
+  html_document:
+    df_print: paged
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1. Bootstrap on sailing yatchs
+```{r}
+########################################################################################
+################################### PROBLEM 1 #########################################
+########################################################################################
+```
+
+### Load Yacht Hydrodynamics dataset
+
+```{r}
+setwd("/Users/eduardo/Desktop/Data Prep/Assignments/Eduardo-Moreno-Ortigosa_hwk3")
+
+df.yacht <- read.csv('yacht_hydrodynamics.data', header = F, sep='',
+                     col.names = c("Longitudinal pos","Prismatic coeff", "Lenght-displacement ratio","Beam-draught ratio","Length-beam ratio","Froude number","Residuary resistance"))
+
+head(df.yacht)
+str(df.yacht)
+summary(df.yacht)
+```
+
+### EDA.
+
+```{r}
+which(is.na(df.yacht)==T)
+str(df.yacht)
+```
+
+No Nan values are found in the dataset and no different characters (for example "?") too.
+
+### Creating a Data Partition. Trining fit for a linear model.
+
+Creating a Data partition to 80% training and 20% test.
+
+```{r}
+library("caret")
+
+set.seed("123")
+training <- createDataPartition(df.yacht$Residuary.resistance, p = 0.8, list = F)
+
+train.yacht <- df.yacht[training,]
+test.yacht <- df.yacht[-training,]
+```
+
+Fitting the linear regression. To see which predictors are important, it should be kept the predictors with highest t-value.
+
+```{r}
+model.yacht <- lm(Residuary.resistance ~ ., data = train.yacht)
+summary(model.yacht)
+```
+
+### MSE/RMSE and R square.
+
+```{r}
+library("Metrics")
+MSE.train <- mse(train.yacht$Residuary.resistance, model.yacht$fitted.values)
+
+RMSE.train <- rmse(train.yacht$Residuary.resistance, model.yacht$fitted.values)
+
+R.adjusted.train <- summary(model.yacht)$adj.r.square
+```
+
+```{r}
+sprintf("The MSE train for the linear model is %f", MSE.train, "\n")
+sprintf("The RMSE train for the linear model is %f", RMSE.train, "\n")
+sprintf("The Adjusted R squared for the linear model is %f", R.adjusted.train, "\n")
+```
+
+### Perform a boostrap
+
+Now in order to perform a bootstrap by using the trainControl function setting the method to "boot" and the number of samples to 1000.
+
+```{r}
+set.seed("123")
+train.control <- trainControl(method="boot", number = 1000)
+
+model.yacht.control <- train(Residuary.resistance ~. , data = df.yacht,
+                             trControl = train.control, method= "lm")
+
+summary(model.yacht.control)
+print(model.yacht.control)
+```
+
+### Histogram of RMSE values. Mean RMSE and R squared.
+
+Each sampling would generate a RMSE value. The resulting RMSE would be the mean of those RMSE values for each sampling.
+The histogram of the RMSE values are plotted as follows:
+
+```{r}
+histogram(model.yacht.control, metrics="RMSE", col="lightblue")
+```
+
+Regarding the mean RMSE of the bootstrap model and the R squared:
+
+```{r}
+RMSE.train.control <- model.yacht.control$results[2]
+
+R.adjusted.train.control <- model.yacht.control$results[3]
+```
+
+```{r}
+sprintf("The mean RMSE train for the bootstrap model is %f", RMSE.train.control,"\n")
+sprintf("The R squared for the bootstrap model is %f", R.adjusted.train.control)
+```
+
+### Conclusions. RMSE and R squared.
+
+#### RMSE
+
+It is possible to see that the RMSE train has a small difference:
+
+```{r}
+sprintf("The RMSE train for the basic model has a value of %f", RMSE.train, "\n")
+sprintf("And for the bootstrap model it has a RMSE train value of %f",RMSE.train.control)
+```
+
+This may be due to the bootstrap has been performed for the full dataset with 1000 samples and thus, the mean of all the RMSE values may differs of the basic linear model.
+
+It is necessary to comment that the bootstrap can be used to estimate the standar errors of coefficients from a linear regression fit.
+Therefore, bootstrap would be useful for those case where measuring the variability is difficult, for example, for a polynomial regression model.
+
+Basically, bootstrap introduces more variety by performing several number of samples which leads to higher RMSE train (the mean of those RMSE train samples) with the following lower RMSE test.
+
+Therefore, the RMSE train for bootstrap is larger than the RMSE train for basic linear regression model.
+
+#### R squared
+
+The values of R squared for bootstrap model and linear regression model:
+
+```{r}
+sprintf("The R squared for the basic model has a value of %f", R.adjusted.train, "\n")
+sprintf("And for the bootstrap model it has a R squared value of %f",R.adjusted.train.control)
+```
+
+The R squared is slightly better for bootstrap model than the standard linear regression model.
+
+#### Performance on the test set.
+
+Regarding the performance on the test set, it is expected that RMSE test will be lower for bootstrap model than for basic linear regression model.
+This is due to introducing more variety by using a total number of 1000 samples.
+
+```{r}
+RMSE.test <- rmse(test.yacht$Residuary.resistance, predict(model.yacht, test.yacht))
+RMSE.test.control <- rmse(test.yacht$Residuary.resistance, predict(model.yacht.control, test.yacht))
+```
+
+```{r}
+sprintf("The RMSE test for the basic model has a value of %f", RMSE.test, "\n")
+sprintf("And for the bootstrap model it has a RMSE test value of %f",RMSE.test.control)
+```
+
+Therefore, the RMSE test for bootstrap is lower than the RMSE for basic linear regression model. In terms of performance of the test, the bootstrap model would be better than the standard linear regression model.
+
+## Problem 2. K-fold cross validation on Creditability dataset.
+
+```{r}
+########################################################################################
+################################### PROBLEM 2 #########################################
+########################################################################################
+```
+
+```{r}
+library("caret")
+```
+
+### Reading the German Credit dataset.
+
+```{r}
+columns.names <- c("Status account","Credit duration", "Credit history", "Purpose",
+                   "Credit amount", "Savings account","Present employ since", 
+                   "Disposable income rate","Status and sex", "Debtors", "Residence since",
+                   "Property","Age","Other plans","Housing","Number Credits","Job",
+                   "Maintenance","Telephone","Foreign","Creditability")
+
+germ.credit <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/statlog/german/german.data"),header = FALSE, sep="", col.names = columns.names)
+
+germ.credit$Creditability <- germ.credit$Creditability - 1
+germ.credit$Creditability <- as.factor(germ.credit$Creditability)
+
+str(germ.credit)
+summary(germ.credit)
+```
+
+### Creating the data partition. Fitting a logistic model.
+
+Creating a Data partition to 80% training and 20% test.
+
+```{r}
+set.seed("123")
+index <- createDataPartition(germ.credit$Creditability, p=0.2, list = F)
+
+germ.credit.train <- germ.credit[-index,]
+germ.credit.test <- germ.credit[index,]
+```
+
+Fitting the logistic model with binomial family (because creditability has only 2 levels). To see which predictors are important, it should be kept the predictors with highest z-value.
+
+```{r}
+model.germ <- glm(Creditability ~ ., data = germ.credit.train, family = "binomial")
+summary(model.germ)
+```
+
+Therefore, the most important variables (those that are chosen because they have a p-value lower than 0.05 and hence, the null hypothesis is rejected) for this model are:
+
+- Status account, where all the status account have a significant z-value and thus, the p-value is lower than 0.05 for all the status accounts.
+- Credit duration, with a p-value of 0.003.
+- Credit amount, with a p-value of 0.024.
+- Disposable income rate, with a p-value of 0.0002.
+
+Further analysis can be performed for specific attributes that are decomposed into various coefficients:
+
+- Credit history. There are 2 significant coefficients that arises from this attribute and another 2 coefficients that are not. However, as one of the coefficient (Credit history A34) is widely significant, this variable should be used. 
+- Purpose. There are 2 variables with low p-value but, since there are a total number of 5 coefficients (large number of coefficients) in which the null hypothesis is not rejected, this attribute would not be used for the final model.
+- Saving account. Again, there is one coefficient higly significant with only 2 non significant coefficients and thus, this attribute will be used.
+- Debtors. This attribute has 1 significant coefficient pretty close to 0.05 (the limit to apply the null hypothesis) and other non significant. Because of that, this attribute will not be used since both coefficients are (or are close to) not being significant.
+- Other plans. Same reason as before, this attribute would not be used.
+
+Trying to create a model with only these most significant variables previously discussed, it yields in:
+
+```{r}
+new.model.germ <- glm(Creditability ~ Status.account + Credit.duration + Credit.amount + Disposable.income.rate + Credit.history + Savings.account, data = germ.credit.train, family = "binomial")
+summary(new.model.germ)
+```
+
+#### Performance of standar model on the train.
+
+##### Creating a confusion matrix.
+
+```{r}
+predicted.germ.train <- predict(model.germ, germ.credit.train, type="response")
+summary(predicted.germ.train)
+
+new.predicted.germ.train <- rep(0, nrow(germ.credit.train))
+new.predicted.germ.train[predicted.germ.train > 0.5] <- 1
+new.predicted.germ.train <- as.factor(new.predicted.germ.train)
+```
+
+##### Precision, Recall and F1 results.
+
+```{r}
+cm.germ.train <- confusionMatrix(new.predicted.germ.train, germ.credit.train$Creditability)
+cm.germ.train
+```
+
+#### Performance of standar model on the test.
+
+```{r}
+predicted.germ <- predict(new.model.germ, germ.credit.test, type="response")
+summary(predicted.germ)
+
+new.predicted.germ <- rep(0, nrow(germ.credit.test))
+new.predicted.germ[predicted.germ > 0.5] <- 1
+new.predicted.germ <- as.factor(new.predicted.germ)
+```
+
+##### Creating a confusion matrix.
+
+```{r}
+cm.germ.test <- confusionMatrix(new.predicted.germ, germ.credit.test$Creditability)
+cm.germ.test
+```
+
+##### Precision, Recall and F1 results.
+
+```{r}
+cat("The Precision for the logistic model is",cm.germ$byClass[5],"\n")
+cat("The Recall for the logistic model is",cm.germ$byClass[6],"\n")
+cat("The F1 for the logistic model is",cm.germ$byClass[7],"\n")
+```
+
+This values may be due to an unbalanced dataset having higher number of positive class (0 class) than the negative class (1 class) and thus, the total number of True Positive will be large. Since the Precision and Recall are the TP divided by (TP+FP) for precision and (TP+FP) for recall, both values would be close to 1.
+
+
+The total number of actual 0 class is much higher than the other class 1. Maybe a resampling method is required previous to perform k-fold validation but, since in this exercise it is being studying the k-fold cross validation, it will follow with the same data than before.
+
+### k-fold cross validation 
+
+k-fold cross validation consists on splitting the training dataset into k groups of equal size. By choosing a number of 10.
+
+```{r}
+set.seed("123")
+train.control.germ <- trainControl(method="cv", number = 10)
+
+model.germ.cv <- train(Creditability ~. , data = germ.credit,
+                             trControl = train.control.germ, method= "glm", family="binomial")
+
+print(model.germ.cv)
+```
+
+```{r}
+model.germ.cv$results
+```
+
+#### Performance on the train set.
+
+```{r}
+predicted.germ.kfold.train <- predict(model.germ.cv, germ.credit.train)
+summary(predicted.germ)
+```
+
+##### Creating a confusion matrix for k-fold cross validation.
+
+```{r}
+cm.germ.kfold.train <- confusionMatrix(predicted.germ.kfold.train, germ.credit.train$Creditability)
+cm.germ.kfold.train
+```
+
+##### Precision, Recall and F1 results for k-fold cross validation.
+
+```{r}
+cat("The Precision for the logistic model with k-fold cross validation is",cm.germ.kfold.train$byClass[5],"\n")
+cat("The Recall for the logistic model with k-fold cross validation is",cm.germ.kfold.train$byClass[6],"\n")
+cat("The F1 for the logistic model with k-fold cross validation is",cm.germ.kfold.train$byClass[7],"\n")
+```
+
+```{r}
+data.frame("Names"=c("Precision","Recall","F1"),"k-fold"=c(cm.germ.kfold.train$byClass[5],cm.germ.kfold.train$byClass[6],cm.germ.kfold.train$byClass[7]), "standar model"=c(cm.germ.train$byClass[5],cm.germ.train$byClass[6],cm.germ.train$byClass[7]))
+```
+
+##### Conclusions to the original set.
+
+It can be concluded that for the performance on the train set, the precision, recall (in this case is almost the same) and F1 is lower for k-fold model or it can be considered that both results are practically the same.
+However, the accuracy of the k-fold performance for the train set is much worse.
+
+#### Performance on the test set.
+
+```{r}
+predicted.germ.kfold <- predict(model.germ.cv, germ.credit.test)
+summary(predicted.germ)
+```
+
+##### Creating a confusion matrix for k-fold cross validation.
+
+```{r}
+cm.germ.kfold <- confusionMatrix(predicted.germ.kfold, germ.credit.test$Creditability)
+cm.germ.kfold
+```
+
+##### Precision, Recall and F1 results for k-fold cross validation.
+
+```{r}
+cat("The Precision for the logistic model with k-fold cross validation is",cm.germ.kfold$byClass[5],"\n")
+cat("The Recall for the logistic model with k-fold cross validation is",cm.germ.kfold$byClass[6],"\n")
+cat("The F1 for the logistic model with k-fold cross validation is",cm.germ.kfold$byClass[7],"\n")
+```
+
+```{r}
+data.frame("Names"=c("Precision","Recall","F1"),"k-fold"=c(cm.germ.kfold$byClass[5],cm.germ.kfold$byClass[6],cm.germ.kfold$byClass[7]), "standar model"=c(cm.germ.test$byClass[5],cm.germ.test$byClass[6],cm.germ.test$byClass[7]))
+```
+
+##### Conclusions to the original set.
+
+It can be concluded for the test results that with k fold model, the precision, recall and F1 is increased as well as the accuracy.
+The resulting confusion matrix for k-fold model looks more balanced than the one obtained with standard model. 

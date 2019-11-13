@@ -1,0 +1,271 @@
+---
+title: "Linear/Logistic Regression"
+subtitle: "Linear Regression, Logistic Regression, Non-linear regression, Confidence Intervals, Prediction Intervals, Prediction, Confussion MAtrix"
+author: "Eduardo Moreno Ortigosa, Illinois Institute of Technology"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+  html_notebook:
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1. Linear Regression on Boston Housing.
+```{r}
+########################################################################################
+################################### PROBLEM 1 #########################################
+########################################################################################
+```
+
+### Loading Boston sample
+
+Loading the Boston sample dataset using a dataframe
+
+```{r}
+rm(list=ls())
+directory <- getwd()
+setwd(directory)
+
+library('MASS')
+data(Boston)
+```
+
+### Linear Regression model
+```{r}
+model <- lm(medv ~ lstat, Boston)
+summary(model)
+```
+
+plotting the resulting fit leads to:
+
+```{r}
+plot(model)
+```
+
+Now plotting the model, the fitted values along with residuals
+
+```{r}
+plot(model,1, col='blue')
+```
+
+As it is possible to see in the plot of Fitted values vs Residuals, the slight convex shape indicate some non linearity in the data.
+There is some non-linear relationship between the predictor and response for some low and high fitted values.
+
+### Confidence intervals and Prediction intervals
+
+The confidence interval:
+```{r}
+test <- data.frame(lstat = c(5, 10, 15))
+predicted.confidence <- predict(model, test, interval = "confidence")
+predicted.confidence
+```
+
+The prediction interval.
+```{r}
+test <- data.frame(lstat = c(5, 10, 15))
+predicted.prediction <- predict(model, test, interval = "prediction")
+predicted.prediction
+```
+
+The confidence intervals and predicted intervals are not the same. However when lstat equals the value of 10, both intervals (lower and upper for confidence and predcited) are centered in the same value for medv. This is not comply for the values of medv when lstat equals 5 and 15.
+
+```{r}
+sprintf("The 95 percent of confidence interval associated with lstat feature corresponds to a lower bound corresponds to %f and the upper bound to %f", predicted.confidence[5], predicted.confidence[8])
+```
+```{r}
+sprintf("The 95 percent of prediction interval associated with lstat feature corresponds to a lower bound corresponds to %f and the upper bound to %f", predicted.prediction[5], predicted.prediction[8])
+```
+
+```{r}
+mean(c(predicted.confidence[5],predicted.confidence[8]))
+mean(c(predicted.prediction[5],predicted.prediction[8]))
+```
+
+Both values are centered in the medv value of 25.05335.
+
+Intervals are not equal because the standard error of both intervals are difference. The confidence interval takes into account the uncertainty due to the sampling meanwhile the prediction interval takes into account the uncertainty due to the sampling and the variability of individuals around the predicted mean.
+This yields in a higher standar error for prediction interval (lower for confidence interval) and thus, a higher range interval for prediction interval; prediction interval will be wider than confidence interval.
+
+### Non Linear Regression model
+
+```{r}
+model.non.linear <- lm(medv ~ lstat + I(lstat^2), Boston)
+summary(model.non.linear)
+```
+
+```{r}
+plot(model.non.linear)
+```
+
+Now comparing the linear fit with the non linear fit. The p-value is low for both models and hence, null hypothesis is rejected for both of them.  
+However, the Adjusted R squared is higher for non linear fit, 0.5432 for linear fit and 0.6393 for non linear fit. 
+In the linear fit, the residual standar error (6.216), which depends on the residual sum of squares is higher than the non linear fit (5.524). This can be shown in previous plots of fitted values vs residuals. The non linear fit is more centered on 0 through the range of fitted values.
+ 
+```{r}
+library("ggplot2")
+
+p.boston <- ggplot(Boston, aes(x = lstat, y = medv)) + geom_point()
+print(p.boston)
+```
+ 
+### Plotting relationships
+
+For linear Regression, the ggplot2 with stats_smooth results:
+
+```{r}
+p.boston + stat_smooth(method = "lm", formula = y ~ x, size = 1)
+```
+
+A visual to the data indicates that the relationship may not be linear, the fit at the extremes is poor (specially for high lstat values).
+
+The non linear fit looks like:
+
+```{r}
+p.boston + stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1)
+```
+
+## Problem 2. Logistic Regression on classifying Credit Risk people.
+```{r}
+########################################################################################
+################################### PROBLEM 2 #########################################
+########################################################################################
+```
+
+### Load the Abalone sample from UCI Machine Learning respository.
+
+Loading the abalone sample dataset from UCI.
+
+```{r}
+df.abalone <- read.csv(url('https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data')
+               ,sep=',',col.names = c("sex","Length","diameter","height", "whole weight", "shucked weight", "viscera weight", "shell weight", "rings"),
+               header = FALSE)
+
+summary(df.abalone)
+str(df.abalone)
+```
+
+### Removing all observation keeping Male/Female classes.
+
+To remove all observation in Infant Category, keeping the Male/Female Classes. It will be necessary to use "which" command.
+The "I" level is also dropped in order to perform correctly the rest of exercise.
+
+```{r}
+df.abalone <- df.abalone[which(df.abalone$sex!= 'I'), ]
+unique(df.abalone$sex)
+
+df.abalone$sex <- droplevels(df.abalone$sex, "I")
+unique(df.abalone$sex)
+
+str(df.abalone)
+```
+
+### Creating a Data Partition. Fit a Logistic Regression Model.
+
+Creating a Data partition to 80% training and 20% test.
+
+```{r}
+library("caret")
+
+set.seed("123")
+training <- createDataPartition(df.abalone$sex, p = 0.8, list = F)
+
+train.abalone <- df.abalone[training,]
+test.abalone <- df.abalone[-training,]
+```
+
+Fitting the logistic regression with binomial family (because sex has only 2 levels). To see which predictors are important, it should be kept the predictors with highest t-value.
+
+```{r}
+model.abalone <- glm(sex ~ ., data = train.abalone, family = "binomial")
+summary(model.abalone)
+```
+
+Therefore, the most important variables for this model are height with z-value of -1.686 and a p-value of 0.09208 (it is not far enought from p=0.05 and thus, with this variable it is not sure that the null hypothesis could be rejected).
+Another important variable is shucked.weight with p-value of 0.00812 and a z-value of 2.647. As the p-value is less than 0.05, the null hypothesis can be rejected.
+
+Trying to create a model with only these most significant variables, it yields in:
+
+```{r}
+new.model.abalone <- glm(sex ~ height + shucked.weight, data = train.abalone, family = "binomial")
+summary(new.model.abalone)
+```
+
+Since AIC is a relative measure of the quality of statistical model for a given data, the AIC in the last model (3109.6) is greater than the first one (3092.3).
+It will be tried to keep the AIC of the model with less variables.
+
+Therefore, the new model may be created with those both variables, however for next sections; it will be used the entire model and studied the results.
+
+Now exploring the confident intervals
+
+```{r}
+predicted.abalone.conf <- predict(model.abalone, test.abalone, interval = "confidence")
+summary(predicted.abalone.conf)
+
+confint(model.abalone)
+```
+
+There are confidence intervals for the predictors which do not contain the 0 value.
+Since there is a close relationship between confidence intervals and hypothesis. If the confidence interval (with 95%) does not include the 0 value, furthermore it is far away from it; it means that the p-value will be strictly less than 0.05 (p-value < 0.5) and thus, the probability of accepting null hypothesis is rejected.
+
+Therefore, The null hypothesis can only be rejected for shucked.weight as commented in the previous section (its p-value is less than 0.05)
+
+### Prediction of class.
+
+Since the predic function results in probabilities (quantitative values), it is given a certain value according to the value obteined in the prediction; that is, a value grater than 0.5 the class will be Male: M and a value lower (or equal) to 0.5 will be Female: F.
+
+```{r}
+predicted.abalone <- predict(model.abalone, test.abalone)
+
+new.predicted.abalone <- rep("F", nrow(test.abalone))
+new.predicted.abalone[predicted.abalone > 0.5] <- "M"
+new.predicted.abalone <- as.factor(new.predicted.abalone)
+
+summary(new.predicted.abalone)
+```
+
+### Confusion Matrix.
+
+Now showing the Confusion Matrix, using a 50% cutoff to tag Male/Female. Finally, the ConfusionMatrix will be:
+```{r}
+confusionMatrix(new.predicted.abalone, test.abalone$sex)
+```
+
+At first view, it looks like the values obtained are not good: the accuracy of the model is under 0.5 (the total true positives and true negatives over all reference are low). The specificity is low too, this will yields in high rate of false positives.
+The sensitivity is pretty good since the value is close to 1 (the total number of false negatives predicted is low), however is not possible to usethis model due to the low accuracy.
+Finally, the data seems to be unblanced since the balanced accuracy is low.
+
+```{r}
+library("gplots")
+library("ROCR")
+```
+The ROC plot is performed with y label as True positive rate and x label as False positive rate.
+
+```{r}
+# ROC curve
+prediction.rocr.abalone <- predict(model.abalone, newdata=test.abalone)
+f.pred.abalone <- prediction(prediction.rocr.abalone, test.abalone$sex)
+f.perf.abalone <- performance(f.pred.abalone, "tpr", "fpr")
+plot(f.perf.abalone, colorize=T, lwd=3)
+abline(0,1)
+```
+
+Due to the ROC curve is close to the diagonal, the model is not good. The true positive rate vs the false positive rate is linear and thus, for each true positive gotten, is exists another false positive.
+This reasoning can be checked in the confusion matrix where the True positives (top left corner) are equal to 235 and false positives (top right corner) are equal to 258.
+
+### Plot of correlation between features.
+
+```{r}
+library("corrplot")
+
+M <- cor(df.abalone[, -1])
+corrplot.mixed(M, upper = "square", number.cex = .5)
+```
+
+It looks like the predictors are higly correlated between them are length with diameter, whole.weight with sucked.weight and that last one with viscera.weight.

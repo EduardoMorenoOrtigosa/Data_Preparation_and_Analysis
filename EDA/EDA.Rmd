@@ -1,0 +1,244 @@
+---
+title: "Exploratory Data Analysis"
+subtitle: "NANs values, IQR, Skewness, Mean and Median"
+author: "Eduardo Moreno Ortigosa, Illinois Institute of Technology"
+output:
+  pdf_document:
+    toc: yes
+  html_notebook:
+    toc: yes
+    toc_float: yes
+  html_document:
+    df_print: paged
+    toc: yes
+---
+
+## Problem 1. Exploratory Data Analysis on different flower species.
+
+```{r}
+########################################################################################
+################################### PROBLEM 1 #########################################
+########################################################################################
+```
+
+### Loading the iris sample dataset.
+
+Loading the iris sample dataset using a dataframe
+
+```{r}
+rm(list=ls())
+directory <- getwd()
+setwd(directory)
+
+library('datasets')
+library('ggplot2')
+data(iris)
+```
+
+### Boxplot of 4 features. IQR.
+
+Create the boxplot of each of 4 features highlighting the one with the largest empirical IQR
+
+```{r}
+##### PLOT FEATURES BY SPECIES #####
+print(colnames(iris))
+boxplot(iris[1:4])
+```
+
+It is possible to visualize that the boxplot with the largest IQR is Petal.Length due to it is the difference between the upper quartile (Q3) and the lower quartile (Q1). The highest difference is found on the third boxplot.
+
+```{r}
+##### FEATURE WITH LARGEST EMPIRICAL IQR #####
+boxplot(iris$Petal.Length)
+```
+
+### Parametric standard deviation.
+
+The parametric standard deviation (sd) is calculated as follows:
+
+```{r}
+##### PARAMETRIC STANDAR DEVIATION ##### REVISAR
+
+#Sepal Length
+TSL <- sd(iris$Sepal.Length) #Formula, the Theorical sd (T equal to theorical)
+
+#Sepal Width
+TSW <- sd(iris$Sepal.Width) 
+
+#Petal Length
+TPL <- sd(iris$Petal.Length) 
+
+#Petal Width
+TPW <- sd(iris$Petal.Width)
+
+### Calculus of IQR ###
+
+IQR.SL <- IQR(iris$Sepal.Length)
+IQR.SW <- IQR(iris$Sepal.Width)
+IQR.PL <- IQR(iris$Petal.Length)
+IQR.PW <- IQR(iris$Petal.Width)
+
+# Table of sd along with IQR #
+
+data.frame("sd"=c(TSL,TSW,TPL,TPW), "IQR"=c(IQR.SL,IQR.SW,IQR.PL,IQR.PW),
+           row.names = c("Sepal Length","Sepal Width","Petal Length","Petal Width"))
+```
+
+Therefore, the highest standard deviation calculus agrees with the empirical values. The IQR is related with the standar deviation obtained, as the IQR increases, the standard deviation also increases. It is possible to measure the spread with IQR and sd, however, they differ in that the standar deviation is more sensitive to outliers.
+
+### Creating colored boxplots for each feature.
+
+Colored boxplot for each feature:
+
+```{r}
+#SEPAL LENGTH 
+box_plot1 <- ggplot(aes(x=iris$Species,y=Sepal.Length,color=iris$Species),data=iris)
+
+box_plot1 + 
+  geom_boxplot() +
+  labs(x="Species")
+
+#SEPAL WIDTH
+box_plot2 <- ggplot(aes(x=iris$Species,y=iris$Sepal.Width,color=iris$Species),data=iris)
+
+box_plot2 + 
+  geom_boxplot()
+
+#PETAL LENGTH
+box_plot3 <- ggplot(aes(x=iris$Species,y=iris$Petal.Length,color=iris$Species),data=iris)
+
+box_plot3 + 
+  geom_boxplot()
+
+#PETAL WIDTH
+box_plot4 <- ggplot(aes(x=iris$Species,y=iris$Petal.Width,color=iris$Species),data=iris)
+
+box_plot4 + 
+  geom_boxplot()
+```
+
+#### Highest difference of 2 features.
+
+And Petal Length/Width:
+
+```{r echo=TRUE}
+##### Petal/Width #####
+
+Petal.Width.division <- (iris$Petal.Length)/(iris$Petal.Width)
+
+box_plot5 <- ggplot(aes(x=iris$Species,y=Petal.Width.division,color=iris$Species),data=iris)
+
+box_plot5 + 
+  geom_boxplot()
+```
+
+## Problem 2. Exploratory Data Analysis on trees. 
+```{r}
+########################################################################################
+################################### PROBLEM 2 #########################################
+########################################################################################
+```
+
+### Loading the trees sample dataset.
+
+Loading the trees sample and producing a 5-numver summary for each feature:
+
+```{r}
+data('trees')
+colnames(trees)
+
+##### 5-NUMBER SUMMARY #####
+summ <- summary(trees)
+```
+
+### Histograms of each variable. 
+
+Histograms of each variable:
+
+```{r}
+hist(trees$Girth) 
+hist(trees$Height) 
+hist(trees$Volume)
+```
+
+### Skewness.
+
+At first approach, the feature which best fits a normal distribution is the Height. In order to verify this conclusion, the skewness is calculated.
+
+```{r}
+#The skewness verifies if the data follows normal distribution.
+#If it is symmetric, it follows normal distrib: Q3-median = median-Q1
+#If it is positive skew: Q3-median > median-Q1
+#If it is negative skew: Q3-median < median-Q1
+
+#install.packages('moments')
+library('moments')
+
+data.frame("feature"=c("Girth","Height","Volume"),
+           "skewness"=c(skewness(trees$Girth),
+                        skewness(trees$Height),
+                        skewness(trees$Volume)))
+
+##### VISUAL INSPECTION #####
+plot(density(trees$Girth))
+plot(density(trees$Height))
+plot(density(trees$Volume))
+```
+
+It is possible to conclude that the visual analysis is correct since the closest skewness to zero is that of Height.
+
+## Problem 3. Exploratory Data Analysis on automation data.
+
+```{r}
+########################################################################################
+################################### PROBLEM 3 #########################################
+########################################################################################
+```
+
+### Loading the auto-mpg sample dataset.
+
+Loading the auto-mpg sample dataset from UCI.
+
+```{r}
+df <- read.csv(url('https://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/auto-mpg.data')
+               ,sep='',col.names = c("mpg","cylinders", "displacement", "horsepower", "weight",
+                                     "acceleration", "model year", "origin", "car name"),
+               header = FALSE, as.is = TRUE)
+```
+
+### Cleaning the data.
+
+Getting the column as a numeric vector and replacing the NA with the median. Study of mean before and after the replacement.
+
+```{r}
+colnames(df)
+str(df)
+
+df.horsepower <- df$horsepower
+df.horsepower <- as.numeric(df.horsepower)
+
+median.df <- median(df.horsepower, na.rm = TRUE)
+first.mean.NA <- mean(df.horsepower, na.rm = TRUE)
+
+number.NA <- 0
+
+for (i in 1:length(df.horsepower)) {
+  if (is.na(df.horsepower[i])){
+    df.horsepower[i] <- median(df.horsepower, na.rm = TRUE)
+    number.NA = number.NA + 1
+  }
+}
+
+new.mean <- mean(df.horsepower)
+```
+
+### Conclusions
+```{r}
+
+print(first.mean.NA)
+print(new.mean)
+print(median.df)
+print(number.NA)
+```
+
+Note that the mean has changed. The first mean was 104.4694 and the second 104.304. This is because of the replacement of NA with median. The median (which is the same after the replacement) displaces the first mean value to a lower one.

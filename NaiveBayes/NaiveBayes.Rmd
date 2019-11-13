@@ -1,0 +1,208 @@
+---
+title: "Naive Bayes Classifier"
+subtitle: "Naive Bayes, Resampling"
+author: "Eduardo Moreno Ortigosa, Illinois Institute of Technology"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+  html_notebook:
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1. Naive Bayes on types of mushrooms.
+```{r}
+########################################################################################
+################################### PROBLEM 3 #########################################
+########################################################################################
+```
+
+```{r}
+rm(list=ls())
+directory <- getwd()
+setwd(directory)
+```
+
+### Loading mushroom sample dataset
+Loading the mushroom sample dataset from UCI Machine Learning Repository:
+
+```{r}
+df.mushroom <- read.csv(url('https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data'),
+               sep =',',col.names = c("class","cap-shape","cap-surface","cap-color","bruises","odor","gill-attachment","gill-spacing","gill-size","gill-color","stalk-shape","stalk-root","stalk-surface-above-ring","stalk-surface-below-ring","stalk-color-above-ring","stalk-color-below-ring","veil-type","veil-color","ring-number","ring-type","spore-print-color","population","habitat"),
+               header = FALSE)
+
+summary(df.mushroom)
+str(df.mushroom)
+```
+
+### Removing the "?" character
+
+To remove the "?" character, it must be shown in which features they are found. To do that, it is used str function.
+In order to know how many "?" characters are there is the dataframe, the which function is used as follows:
+
+```{r}
+length(which(df.mushroom=="?"))
+unique(which(df.mushroom == "?", arr.ind = TRUE)[,2])
+```
+
+Therefore, it exists "?" character in the column 12 (the unique function shows that all of them are in that column).
+It is necessary to analyze that column and then remove the desired character. One possibility is by removing the rows which contain the "?" character, however, as it is only the column 12 (stalk root) the one which have the "?" character and there are a total of 2480 values of that column with "?" character, it is a better option to remove the entire column directly and keep the rest of 2480 rows from the other features.
+If not, a big number of observation will be remove and among that, the model can result in unbalanced.
+
+Before that, it is neccesary to prove that the relationship of this feature on the response is not high, (the z-value is not high) and thus, it can be removed. It has been tested on command window.
+As the resulting z-value (estimator of stalk.root divided by the standar error of that estimator) is small, the entire column can be removed.
+
+```{r}
+length(which(df.mushroom$stalk.root=="?"))
+
+df.mushroom <- df.mushroom[ ,-12]
+length(which(df.mushroom=="?"))
+```
+
+As it is showed, the "?"characters have been removed from dataset and the 2480 values from the other features have been kept.
+
+### Naive Bayes Classifier
+
+In order to create a Naive Bayes Classifier with e1071 package using the sample function to split the data.
+
+#### Creating a data partition (80-20%)
+First, it is chosen 80% of data for training dataframe and 20% for testing.
+```{r}
+library("e1071")
+
+set.seed(123)
+index <- sample(1:nrow(df.mushroom), size=0.2*nrow(df.mushroom))
+test.mushroom <- df.mushroom[index, ]
+train.mushroom <- df.mushroom[-index, ]
+```
+
+#### Creating th Naive Bayes Classifier.
+
+Now creating the Naive Bayes classifier:
+
+```{r}
+NBclassifier.mushroom = naiveBayes(class~., data=train.mushroom)
+summary(NBclassifier.mushroom)
+print(NBclassifier.mushroom)
+```
+
+The output of Naive Bayes classifier is a list of tables with a priori and conditional probabilities of each class of the response.
+Before observing any predictors (a prior), it leads to a probability of 0.52 for "e" value and 0.48 for "p" value.
+Each table refers to a predictor. In that table, each row is the response ("class" feature) and each header is the value of the predictor.
+
+In addition, by studying the resulting model Naive Bayes classifier by printing it, it yields in some conclusions about the features:
+
+-Feature veil.type has only one value "p" character.
+-Feature looks like most of the values are "w" character.
+-Feature ring.number same as veil.color with "o" character.
+-Feature gill.attachment, most values are "f" character.
+
+In order to prove those suppositions, these features are going to be plotted and studied.
+
+```{r}
+counts1 <- table(df.mushroom$gill.attachment)
+barplot(counts1, main="Gill Attachment", col =c("darkgreen","green"))
+
+counts4 <- table(df.mushroom$veil.type)
+barplot(counts4, main="Veil Type", col =c("darkblue","blue"))
+
+counts5 <- table(df.mushroom$veil.color)
+barplot(counts5, main="Veil Color", col =c("darkred","red"))
+
+counts6 <- table(df.mushroom$ring.number)
+barplot(counts6, main="Ring Number", col =c("orange","yellow"))
+```
+
+
+### Edible mushrooms. Accuracy of the classifier.
+
+First of all, it should be checked the number of "edible" values in relation with "p" values.
+
+```{r}
+numb.e <- sum(df.mushroom$class=="e")  #Number of e values
+numb.p <- sum(df.mushroom$class=="p")  #Number of p values
+
+sprintf("The number of edible mushroom is %f and the number of no edible is %f", round(numb.e*100/(numb.e+numb.p),2), round(numb.p*100/(numb.e+numb.p),2))
+```
+
+
+```{r}
+counts.class <- table(df.mushroom$class)
+barplot(counts.class, main="Mushroom Distribution", xlab="Type of classes", col = c("blue","orange"))
+```
+
+This last step is important because the data must be balanced. In this specific case, it looks like it is already and thus, no resampling is needed.
+
+By only using the table function, the resulting confusion matrix with the corresponding errors calculated manually:
+
+```{r}
+pred.mushroom <- predict(NBclassifier.mushroom, test.mushroom)
+table.mushroom <- table(pred.mushroom,test.mushroom$class)
+print(table.mushroom)
+
+TP <- table.mushroom[1,1]
+TN <- table.mushroom[2,2]
+FP <- table.mushroom[1,2]
+FN <- table.mushroom[2,1]
+
+accuracy <- (TP+TN)/(TP+TN+FP+FN)
+accuracy
+
+balanced.accuracy <- (TP/(TP+FP) + TN/(TN+FN))/2
+balanced.accuracy
+
+sensitivity(table.mushroom)
+specificity(table.mushroom)
+```
+
+The accuracy of in-training and in-test is calculated with accuracy function:
+
+```{r}
+#install.packages("MLmetrics")
+library("MLmetrics")
+
+Accuracy(pred.mushroom, test.mushroom$class)
+
+mushroom.train.accuracy <- predict(NBclassifier.mushroom, train.mushroom)
+Accuracy(mushroom.train.accuracy, train.mushroom$class)
+
+sprintf("The accuracy of train is %f", Accuracy(mushroom.train.accuracy, train.mushroom$class) )
+sprintf("The accuracy of test is %f", Accuracy(pred.mushroom, test.mushroom$class))
+```
+
+In order to check those results, it can be compared with the confusion matrix function.
+
+First, the Confusion Matrix for train accuracy:
+
+```{r}
+confusionMatrix(mushroom.train.accuracy,train.mushroom$class)
+```
+
+And then, the Confusion Matrix for test accuracy:
+```{r}
+confusionMatrix(pred.mushroom,test.mushroom$class)
+```
+
+It is possible to check that both accuracys calculated with MLmetrix and Confusion Matrix are the same.
+
+As the dataset is balanced, the value of accuracy of the model is close to the balanced accuracy.
+Now few conclusions can be made from the confusion matrix of test (or the studied table).
+
+```{r}
+sprintf("The resulting sensitivity is %f which shows that the True positive rate is high and thus, the proportion of actual positives that are correctly identified is high.", sensitivity(table.mushroom))
+```
+
+```{r}
+sprintf("The total number of false positives is %d", FP)
+```
+
+```{r}
+sprintf("The resulting sensitivity is %f which shows that the True positive rate is high and thus, the proportion of actual negatives that are correctly identified is high but not as sensitivity.", specificity(table.mushroom))
+```
